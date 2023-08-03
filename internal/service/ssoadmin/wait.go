@@ -5,10 +5,13 @@ package ssoadmin
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ssoadmin"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
+	"github.com/hashicorp/terraform-provider-aws/internal/tfresource"
 )
 
 const (
@@ -32,6 +35,9 @@ func waitAccountAssignmentCreated(ctx context.Context, conn *ssoadmin.SSOAdmin, 
 
 	outputRaw, err := stateConf.WaitForStateContext(ctx)
 	if v, ok := outputRaw.(*ssoadmin.AccountAssignmentOperationStatus); ok {
+		if status, reason := aws.StringValue(v.Status), aws.StringValue(v.FailureReason); status == ssoadmin.StatusValuesFailed && reason != "" {
+			tfresource.SetLastError(err, errors.New(reason))
+		}
 		return v, err
 	}
 
@@ -50,6 +56,9 @@ func waitAccountAssignmentDeleted(ctx context.Context, conn *ssoadmin.SSOAdmin, 
 
 	outputRaw, err := stateConf.WaitForStateContext(ctx)
 	if v, ok := outputRaw.(*ssoadmin.AccountAssignmentOperationStatus); ok {
+		if status, reason := aws.StringValue(v.Status), aws.StringValue(v.FailureReason); status == ssoadmin.StatusValuesFailed && reason != "" {
+			tfresource.SetLastError(err, errors.New(reason))
+		}
 		return v, err
 	}
 
