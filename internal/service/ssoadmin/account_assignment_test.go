@@ -88,6 +88,30 @@ func TestAccSSOAdminAccountAssignment_Basic_user(t *testing.T) {
 	})
 }
 
+func TestAccSSOAdminAccountAssignment_MissingPolicy(t *testing.T) {
+	ctx := acctest.Context(t)
+	rName := sdkacctest.RandomWithPrefix(acctest.ResourcePrefix)
+	userName := os.Getenv("AWS_IDENTITY_STORE_USER_NAME")
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() {
+			acctest.PreCheck(ctx, t)
+			testAccPreCheckInstances(ctx, t)
+			testAccPreCheckIdentityStoreUserName(t)
+		},
+		ErrorCheck:               acctest.ErrorCheck(t, ssoadmin.EndpointsID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckAccountAssignmentDestroy(ctx),
+		Steps: []resource.TestStep{
+			{
+				// We assign a policy called rName on the assumption it doesn't exist due to being randomly generated, hoping to generate an error
+				Config:      testAccAccountAssignmentConfig_withCustomerPolicy(userName, "/", rName, rName),
+				ExpectError: regexp.MustCompile(fmt.Sprintf(`Received a 404 status error: Not supported policy.*%s`, rName)),
+			},
+		},
+	})
+}
+
 func TestAccSSOAdminAccountAssignment_disappears(t *testing.T) {
 	ctx := acctest.Context(t)
 	resourceName := "aws_ssoadmin_account_assignment.test"
@@ -256,6 +280,21 @@ resource "aws_ssoadmin_account_assignment" "test" {
   principal_id       = data.aws_identitystore_user.test.user_id
 }
 `, userName))
+}
+
+func testAccAccountAssignmentConfig_withCustomerPolicy(userName, policyPath, policyName, rName string) string {
+	return acctest.ConfigCompose(
+		testAccAccountAssignmentConfig_basicUser(userName, rName),
+		fmt.Sprintf(`
+resource "aws_ssoadmin_customer_managed_policy_attachment" "test" {
+  instance_arn       = aws_ssoadmin_permission_set.test.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.test.arn
+  customer_managed_policy_reference {
+    name = %q
+    path = %q
+  }
+}
+`, policyName, policyPath))
 }
 
 func testAccPreCheckIdentityStoreGroupName(t *testing.T) {
